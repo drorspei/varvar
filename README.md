@@ -29,4 +29,5 @@ preds = predict(trees, [x])
 
 found_threshold = trees[1][0][1]
 print(correct_threshold, found_threshold)  # 300, 295
+print(np.sqrt(min(preds)), np.sqrt(max(preds)))  # 1, 30
 ```
