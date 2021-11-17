@@ -21,11 +21,11 @@ sigma = 1 * (x <= correct_threshold) + 30 * (x > correct_threshold)
 e = sigma * random.randn(n)
 
 trees = multiplicative_variance_trees(
-    numba.typed.List([x]), e**2,
+    [x], e**2,
     numtrees=1, maxdepth=1, mingain=1, learning_rate=1,
     q=np.linspace(0, 1, 100)[1:-1]
 )
-preds = predict(trees, numba.typed.List([x]))
+preds = predict(trees, [x])
 
 found_threshold = trees[1][0][1]
 print(correct_threshold, found_threshold)  # 300, 295
