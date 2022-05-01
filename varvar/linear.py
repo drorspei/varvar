@@ -1,3 +1,7 @@
+"""
+This is an implementation of parameter estimation for linear variance.
+It requires scipy.
+"""
 from numba import njit
 import numpy as np
 import scipy.optimize 
