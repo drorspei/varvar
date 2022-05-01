@@ -1,16 +1,33 @@
 # varvar
 Python package to model variance in different ways
 
-# Multiplicative variance trees
+# Multiplicative variance trees and the varvar algorithm
 
-Like additive regression trees.
+varvar is a greedy algorithm for multiplicative variance trees.
 
-There are two important functions: `multiplicative_variance_trees`, `predict`
+varvar is to variance as lightgbm/xgboost/... are to expectation.
+
+There are currently two implementations of varvar algorithms:
+1. using quantile search at every split (in `varvar.qtrees`)
+2. using histograms, with binning before starting (in `varvar.htrees`)
+
+Quantile search is much slower, but can be more accurate.
+
+This is similar to the "exact" and "hist" modes in xgboost, except our "exact"
+algorithm goes over a small (exact) subset of each feature.
+
+Both implementation modules have a `multiplicative_variance_trees` function.
+
+Use `treespredict.predict` for prediction.
+
+The trees are returned as plain python types and can be serialized with pickle
+or even as json.
 
 Here is an example:
 
 ```
-from varvar.trees import multiplicative_variance_trees, predict  # takes time because numba compiles functions
+from varvar.htrees import multiplicative_variance_trees  # takes time because numba compiles functions
+from varvar.treespredict import predict
 import numpy as np
 
 random = np.random.RandomState(1729)

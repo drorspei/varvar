@@ -2,6 +2,8 @@ import numpy as np
 import numba
 from typing import List
 
+from varvar.treespredict import predict_tree
+
 
 @numba.jit("UniTuple(float64, 2)(float64[:], float64[:])", nopython=True)
 def single_best_multiplicative(s2, y2) -> ("log-likelihood", "s2"):
@@ -18,7 +20,7 @@ def single_best_multiplicative(s2, y2) -> ("log-likelihood", "s2"):
     "Tuple((float64, float64, float64, float64, float64, unicode_type))(float64[:], float64[:], float64[:], float64, i8)",
     nopython=True
 )
-def quantile_single_best_split(x, s2, y2, c, min_split_size=1000) -> ("log-likelihood1", "s2_1", "log-likelihood2", "s2_2", "threshold", "deault direction"):
+def quantile_single_best_split(x, s2, y2, c, min_child_size=1000) -> ("log-likelihood1", "s2_1", "log-likelihood2", "s2_2", "threshold", "deault direction"):
     best_tup = np.NINF, np.nan, np.NINF, np.nan, np.nan, "left"
     nans = np.isnan(x)
     
@@ -36,7 +38,7 @@ def quantile_single_best_split(x, s2, y2, c, min_split_size=1000) -> ("log-likel
 
     for default, inds in inds1:
         num_inds_0 = np.sum(inds[0])
-        if num_inds_0 < min_split_size or (len(y2) - num_inds_0) < min_split_size:
+        if num_inds_0 < min_child_size or (len(y2) - num_inds_0) < min_child_size:
             continue
 
         r1 = single_best_multiplicative(s2[inds[0]], y2[inds[0]])
@@ -62,13 +64,13 @@ def best_split_signature(*extra, **kwargs):
     )
 
 
-def _best_split(X, s2, y2, q=np.r_[:1:11j][1:-1], min_split_size=1000) -> ("log-likelihood1", "s2_1", "log-likelihood2", "s2_2", "threshold", "deault direction", "feature index"):
+def _best_split(X, s2, y2, q=np.r_[:1:11j][1:-1], min_child_size=1000) -> ("log-likelihood1", "s2_1", "log-likelihood2", "s2_2", "threshold", "deault direction", "feature index"):
     splits = [(np.NINF, np.nan, np.NINF, np.nan, np.nan, "left")] * (len(X) * len(q))
     for i in numba.prange(len(X) * len(q)):
         f, qi = i // len(q), i % len(q)
         x = X[f]
         c = np.nanquantile(x, q[qi])
-        splits[i] = quantile_single_best_split(x, s2, y2, c, min_split_size=min_split_size)
+        splits[i] = quantile_single_best_split(x, s2, y2, c, min_child_size=min_child_size)
 
     best_i = 0
     best = splits[0][0] + splits[0][2]
@@ -85,11 +87,11 @@ sequential_best_split = best_split_signature()(_best_split)
 
 
 @best_split_signature(numba.types.boolean)
-def best_split(X, s2, y2, q=np.r_[:1:11j][1:-1], min_split_size=1000, threads=True):
+def best_split(X, s2, y2, q=np.r_[:1:11j][1:-1], min_child_size=1000, threads=True):
     if threads:
-        return parallel_best_split(X, s2, y2, q=q, min_split_size=min_split_size)
+        return parallel_best_split(X, s2, y2, q=q, min_child_size=min_child_size)
     else:
-        return sequential_best_split(X, s2, y2, q=q, min_split_size=min_split_size)
+        return sequential_best_split(X, s2, y2, q=q, min_child_size=min_child_size)
 
     
 tree_instance = numba.typed.List()
@@ -103,14 +105,14 @@ tree_type = numba.typeof(tree_instance)
     nopython=True
 )
 def best_tree(
-    X, s2, y2, max_depth, mingain, ll_pred=np.NINF, q=np.r_[:1:11j][1:-1], min_split_size=1000, threads=True
+    X, s2, y2, max_depth, min_gain, ll_pred=np.NINF, q=np.r_[:1:11j][1:-1], min_child_size=1000, threads=True
 ) -> 'List[Union[Tuple["right tree offset", "threshold", "deault direction", "feature index"), Tuple["log-likelihood", "s2", '', '')]]':
     if max_depth <= 0:
         return numba.typed.List([single_best_multiplicative(s2, y2) + ('', -1)])
     
-    ll1, s2_1, ll2, s2_2, threshold, default, feature = best_split(X, s2, y2, q=q, min_split_size=min_split_size, threads=threads)
+    ll1, s2_1, ll2, s2_2, threshold, default, feature = best_split(X, s2, y2, q=q, min_child_size=min_child_size, threads=threads)
      
-    if ll1 + ll2 > ll_pred + mingain:
+    if ll1 + ll2 > ll_pred + min_gain:
         lls = [ll1, ll2]
         x = X[feature]
         nans = np.isnan(x)
@@ -137,10 +139,10 @@ def best_tree(
                 best_tree(
                     numba.typed.List([x[inds] for x in X]),
                     s2[inds], y2[inds],
-                    max_depth - 1, mingain,
+                    max_depth - 1, min_gain,
                     ll,
                     q=q,
-                    min_split_size=min_split_size,
+                    min_child_size=min_child_size,
                     threads=threads
                 )
             )
@@ -154,60 +156,58 @@ def best_tree(
     return numba.typed.List([single_best_multiplicative(s2, y2) + ('', -1)])
 
 
-@numba.jit(
-    numba.types.void(tree_type, numba.types.int64, list_of_arrays_type, numba.types.float64[:], numba.types.int64[:]),
-    # parallel=True, # can't do parallel recursive functions in numba 0.54.1
-    nopython=True
-)
-def predict_tree_inplace(tree, offset, X, y, inds):
-    if not X:
-        return
-    if tree[offset][3] == -1:
-        y[inds] *= tree[offset][1]
-    else:
-        right_tree_offset, threshold, default, feature = tree[offset]
-        right_tree_offset = int(right_tree_offset)
-        x = X[feature][inds]
-        nans = np.isnan(x)
-        
-        inds0 = [
-            np.less_equal(x, threshold),
-            np.greater(x, threshold)
-        ]
-
-        inds0[0 if default == "left" else 1] |= nans
-        offsets = [0, right_tree_offset]
-        for i in numba.prange(2):
-            predict_tree_inplace(tree, offset + 1 + offsets[i], X, y, inds[inds0[i]])
-
-            
-@numba.jit(
-    numba.types.float64[:](tree_type, list_of_arrays_type),
-    nopython=True
-)
-def predict_tree(tree, X):
-    if not X:
-        return np.zeros(0)
-    y = np.ones(len(X[0]))
-    predict_tree_inplace(tree, 0, X, y, np.arange(len(y)))
-    return y
-
-
 def multiplicative_variance_trees(
     X: List[np.ndarray],
     y2: np.ndarray,
     *,
+    q: List[float]=np.r_[:1:11j][1:-1],
     num_trees: int,
     max_depth: int,
-    mingain: float,
+    min_gain: float,
     learning_rate: float=0.3,
-    q: List[float]=np.r_[:1:11j][1:-1],
-    min_split_size: int=1000,
+    min_child_size: int=1000,
     threads: bool=True
 ):
+    """
+    Fit multiplicative variance trees on the feature columns in `X` with target
+    `y2`:
+        y^2 ~ N(0, exp( \sum_i T_i(X) )^2)
+        
+    The algorithm will look for splits only at the quantiles passed in q.
+    It's a bit slow really.
+    But it seems to perform well.
+        
+    Args:
+        X: List of feature arrays.
+        y2: Target residuals to model, assumed to already be squared.
+        num_trees: Number of trees to fit, not including a `base_value` tree.
+        max_depth: Maximum depth of each tree.
+        min_gain: Minimum log-likelihood increase required to make a further
+          partition on a leaf node of the tree.
+        learning_rate: Step size shrinkage used in update to prevent overfitting.
+        min_child_size: Minimum number of instances in a child.
+        q: Quantiles to go over when looking for split thresholds in each
+          feature.
+        threads: Whether to use threads or not. The current implementation uses
+          numba's support for openmp, make sure you have it installed.
+    
+    Returns:
+        A list trees, where each tree is a list of tuples, each representing
+          a split node or a leaf node.
+        Tuples have four components:
+          right sub-tree offset, threshold, default direction, feature index
+        where for a leaf node feature is -1 and threshold is in fact the value
+        at the leaf.
+        For a split node, right tree offset is the offset from the current
+          index in the tree list of the node of the right sub-tree. If the
+          feature at feature index is less than the threshold, we continue to
+          the the next node in the tree list, otherwise we go to the right
+          sub-tree. If the feature is missing (NaN) then we use the default
+          direction.
+    """
     assert num_trees >= 0, "num_trees must be non-negative"
     assert learning_rate > 0, "learning rate must be positive"
-    assert min_split_size >= 1, "min_split_size must be at least 1"
+    assert min_child_size >= 1, "min_child_size must be at least 1"
     assert isinstance(threads, bool), "threads must True or False"
     
     y2 = np.asanyarray(y2)
@@ -222,7 +222,7 @@ def multiplicative_variance_trees(
     trees = [numba.typed.List([(np.nan, np.mean(y2), '', -1)])]
     s2 = np.ones_like(y2) * np.mean(y2)
     for _ in range(num_trees):
-        tree = best_tree(X, s2, y2, max_depth=max_depth, mingain=float(mingain), ll_pred=np.NINF, q=q, min_split_size=min_split_size, threads=threads)
+        tree = best_tree(X, s2, y2, max_depth=max_depth, min_gain=float(min_gain), ll_pred=np.NINF, q=q, min_child_size=min_child_size, threads=threads)
         for i, (ll, s2_, empty, feature) in enumerate(tree):
             if feature == -1:
                 tree[i] = ll, s2_ ** learning_rate, empty, feature
@@ -230,9 +230,6 @@ def multiplicative_variance_trees(
         r = predict_tree(tree, X)
         s2 *= r
         
-    return trees
-
-def predict(trees, X):
-    X = numba.typed.List(X)
-    return np.prod([predict_tree(tree, X) for tree in trees], axis=0)
-
+    ret = list(map(list, trees))
+        
+    return ret
