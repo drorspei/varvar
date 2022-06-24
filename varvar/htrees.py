@@ -349,7 +349,7 @@ def midpoints_and_inds(X, max_bin, sample_inds):
         midpoints = midpoints[~np.isnan(midpoints)]
         midpoints = np.unique(midpoints)
         midpoints = np.hstack((np.array([np.NINF]), midpoints, np.array([np.inf])))
-        inds = np.digitize(x, midpoints)
+        inds = np.digitize(x, midpoints, right=True)
         midpoints = np.hstack((midpoints, np.array([np.nan])))
         
         X_inds[i] = inds.astype(np.uint8)

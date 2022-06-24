@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='varvar',
-    version='1.0.0',
+    version='1.0.1',
     description='Model variance with multiplicative variance trees',
     url="https://github.com/drorspei/varvar",
     author='Dror Speiser',
