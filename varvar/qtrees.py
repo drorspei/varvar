@@ -2,7 +2,7 @@ import numpy as np
 import numba
 from typing import List
 
-from varvar.predict import predict_tree
+from varvar.predicttrees import predict_tree
 
 
 @numba.jit("UniTuple(float64, 2)(float64[:], float64[:])", nopython=True)

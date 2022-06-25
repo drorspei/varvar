@@ -158,13 +158,13 @@ def predict(
         Numpy array of positive floats, representing predictions of the
         variance of the random variable conditioned on the features.
     """
-    from varvar.predict import predict as _predict
+    from varvar.predicttrees import predict as _predict
     return _predict(trees, X)
 
 def import_():
     import varvar.qtrees
     import varvar.htrees
-    import varvar.predict
+    import varvar.predicttrees
 
 _thread = threading.Thread(target=import_)
 _thread.start()

@@ -18,7 +18,7 @@ algorithm goes over a small (exact) subset of each feature.
 
 Both implementation modules have a `multiplicative_variance_trees` function.
 
-Use `treespredict.predict` for prediction.
+Use `varvar.predict` for prediction.
 
 The trees are returned as plain python types and can be serialized with pickle
 or even as json.
@@ -26,8 +26,8 @@ or even as json.
 Here is an example:
 
 ```
-from varvar.htrees import multiplicative_variance_trees  # takes time because numba compiles functions
-from varvar.treespredict import predict
+from varvar.htrees import multiplicative_variance_trees
+from varvar import predict
 import numpy as np
 
 random = np.random.RandomState(1729)
@@ -48,3 +48,17 @@ found_threshold = trees[1][0][1]
 print(correct_threshold, found_threshold)  # 300, 295
 print(np.sqrt(min(preds)), np.sqrt(max(preds)))  # 1, 30
 ```
+
+## conversion to xgboost booster
+
+You can convert multiplicative variance trees to an xgboost booster.
+
+This allows you to use xgboost's predict function (which actually seems to be a bit slower), and more importantly to use the shap package
+to interpret varvar predictions.
+
+```
+from varvar import mvt_to_xgboost
+booster = mvt_to_xgboost(trees)
+```
+
+You need xgboost installed to run this code.
