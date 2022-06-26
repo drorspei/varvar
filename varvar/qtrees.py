@@ -95,7 +95,7 @@ def best_split(X, s2, y2, q=np.r_[:1:11j][1:-1], min_child_size=1000, threads=Tr
 
     
 tree_instance = numba.typed.List()
-tree_instance.append((1., 2., 'left', -1))
+tree_instance.append((1., 2., 'left', -1, 1))
 tree_type = numba.typeof(tree_instance)
 
 
@@ -108,7 +108,7 @@ def best_tree(
     X, s2, y2, max_depth, min_gain, ll_pred=np.NINF, q=np.r_[:1:11j][1:-1], min_child_size=1000, threads=True
 ) -> 'List[Union[Tuple["right tree offset", "threshold", "deault direction", "feature index"), Tuple["log-likelihood", "s2", '', '')]]':
     if max_depth <= 0:
-        return numba.typed.List([single_best_multiplicative(s2, y2) + ('', -1)])
+        return numba.typed.List([single_best_multiplicative(s2, y2) + ('', -1, len(s2))])
     
     ll1, s2_1, ll2, s2_2, threshold, default, feature = best_split(X, s2, y2, q=q, min_child_size=min_child_size, threads=threads)
      
@@ -129,7 +129,7 @@ def best_tree(
             ]
         
         tree_instance = numba.typed.List()
-        tree_instance.append((1., 2., 'left', -1))
+        tree_instance.append((1., 2., 'left', -1, 1))
         left_right = [tree_instance, tree_instance]
         
         for i in numba.prange(2):
@@ -147,13 +147,13 @@ def best_tree(
                 )
             )
         
-        r = numba.typed.List([(len(left_right[0]) + 0., threshold, default, feature)])
+        r = numba.typed.List([(len(left_right[0]) + 0., threshold, default, feature, len(s2))])
         r.extend(left_right[0])
         r.extend(left_right[1])
         
         return r
     
-    return numba.typed.List([single_best_multiplicative(s2, y2) + ('', -1)])
+    return numba.typed.List([single_best_multiplicative(s2, y2) + ('', -1, len(s2))])
 
 
 def multiplicative_variance_trees(
@@ -219,13 +219,13 @@ def multiplicative_variance_trees(
     
     X = numba.typed.List([x for x in X])
     
-    trees = [numba.typed.List([(np.nan, np.mean(y2), '', -1)])]
+    trees = [numba.typed.List([(np.nan, np.mean(y2), '', -1, len(X[0]))])]
     s2 = np.ones_like(y2) * np.mean(y2)
     for _ in range(num_trees):
         tree = best_tree(X, s2, y2, max_depth=max_depth, min_gain=float(min_gain), ll_pred=np.NINF, q=q, min_child_size=min_child_size, threads=threads)
-        for i, (ll, s2_, empty, feature) in enumerate(tree):
+        for i, (ll, s2_, empty, feature, ndata) in enumerate(tree):
             if feature == -1:
-                tree[i] = ll, s2_ ** learning_rate, empty, feature
+                tree[i] = ll, s2_ ** learning_rate, empty, feature, ndata
         trees.append(tree)
         r = predict_tree(tree, X)
         s2 *= r

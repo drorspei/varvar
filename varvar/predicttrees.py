@@ -5,7 +5,7 @@ import numpy as np
 
 
 list_of_arrays_type = numba.types.ListType(numba.types.f8[::1])
-tree_instance = numba.typed.List([(1., 2., 'left', -1)])
+tree_instance = numba.typed.List([(1., 2., 'left', -1, 1)])
 trees_instance = numba.typed.List([tree_instance])
 tree_type = numba.typeof(tree_instance)
 trees_type = numba.typeof(trees_instance)
@@ -21,7 +21,7 @@ def predict_tree_inplace(tree, offset, X, y, inds):
     if tree[offset][3] == -1:
         y[inds] *= tree[offset][1]
     else:
-        right_tree_offset, threshold, default, feature = tree[offset]
+        right_tree_offset, threshold, default, feature, _ = tree[offset]
         right_tree_offset = int(right_tree_offset)
         x = X[feature][inds]
         nans = np.isnan(x)

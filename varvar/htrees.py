@@ -269,9 +269,9 @@ trees_type = numba.typeof(trees_instance)
 # )
 def best_tree(
     X_inds, X_midpoints, y2_over_s2, log_s2, histograms, max_depth, min_gain, ll_pred=np.NINF, min_child_size=1000, threads=True
-) -> 'List[Union[Tuple["right tree offset", "threshold", "deault direction", "feature index"), Tuple["log-likelihood", "s2", '', '')]]':
+) -> 'List[Union[Tuple["right tree offset", "threshold", "deault direction", "feature index", "ndata"), Tuple["log-likelihood", "s2", '', '', "ndata")]]':
     if max_depth <= 0:
-        return numba.typed.List([single_best_multiplicative(y2_over_s2, log_s2) + ('', -1)])
+        return numba.typed.List([single_best_multiplicative(y2_over_s2, log_s2) + ('', -1, len(log_s2))])
     
     if not len(histograms):
         histograms = all_histograms(X_inds, X_midpoints, y2_over_s2, log_s2, threads=threads)
@@ -324,13 +324,13 @@ def best_tree(
                     )
                 )
 
-            r = numba.typed.List([(len(left_right[0]) + 0., threshold, default, feature)])
+            r = numba.typed.List([(len(left_right[0]) + 0., threshold, default, feature, len(log_s2))])
             r.extend(left_right[0])
             r.extend(left_right[1])
 
             return r
     
-    return numba.typed.List([single_best_multiplicative(y2_over_s2, log_s2) + ('', -1)])
+    return numba.typed.List([single_best_multiplicative(y2_over_s2, log_s2) + ('', -1, len(log_s2))])
 
 
 @numba.jit(
@@ -402,8 +402,8 @@ def multiplicative_variance_trees(
     Returns:
         A list trees, where each tree is a list of tuples, each representing
           a split node or a leaf node.
-        Tuples have four components:
-          right sub-tree offset, threshold, default direction, feature index
+        Tuples have five components:
+          right sub-tree offset, threshold, default direction, feature index, ndata
         where for a leaf node feature is -1 and threshold is in fact the value
         at the leaf.
         For a split node, right tree offset is the offset from the current
@@ -436,7 +436,7 @@ def multiplicative_variance_trees(
             
     trees = []
     if base_score != 1.:
-        trees.append(numba.typed.List([(np.nan, base_score, '', -1)]))
+        trees.append(numba.typed.List([(np.nan, base_score, '', -1, len(X[0]))]))
     
     s2 = np.ones_like(y2) * base_score
     
@@ -447,9 +447,9 @@ def multiplicative_variance_trees(
     for _ in range(num_trees):
         tree = best_tree(X_inds, X_midpoints, y2_over_s2, log_s2, histograms, max_depth=max_depth, min_gain=float(min_gain), ll_pred=np.NINF, min_child_size=min_child_size, threads=threads)
         
-        for i, (ll, s2_, empty, feature) in enumerate(tree):
+        for i, (ll, s2_, empty, feature, ndata) in enumerate(tree):
             if feature == -1:
-                tree[i] = ll, s2_ ** learning_rate, empty, feature
+                tree[i] = ll, s2_ ** learning_rate, empty, feature, ndata
                 
         trees.append(tree)
         r = predict_tree(tree, X)
