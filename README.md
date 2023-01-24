@@ -39,8 +39,7 @@ e = sigma * random.randn(n)
 
 trees = multiplicative_variance_trees(
     [x], e**2,
-    num_trees=1, max_depth=1, mingain=1, learning_rate=1,
-    q=np.linspace(0, 1, 100)[1:-1]
+    num_trees=2, max_depth=1, min_gain=1, learning_rate=1,
 )
 preds = predict(trees, [x])
 
