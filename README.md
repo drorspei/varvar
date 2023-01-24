@@ -57,7 +57,7 @@ to interpret varvar predictions.
 
 ```
 from varvar import mvt_to_xgboost
-booster = mvt_to_xgboost(trees)
+booster = mvt_to_xgboost(trees, feature_names=["f1", "f2"])
 ```
 
-You need xgboost installed to run this code.
+You need xgboost 1.6.1 or higher installed to run this code.
